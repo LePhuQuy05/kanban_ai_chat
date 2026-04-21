@@ -15,6 +15,8 @@ export type BoardData = {
   cards: Record<string, Card>;
 };
 
+export const BOARD_STORAGE_KEY = "kanban-demo-board";
+
 export const initialData: BoardData = {
   columns: [
     { id: "col-backlog", title: "Backlog", cardIds: ["card-1", "card-2"] },
@@ -69,6 +71,84 @@ export const initialData: BoardData = {
       details: "Document release notes and share internally.",
     },
   },
+};
+
+export const createInitialBoardData = (): BoardData => ({
+  columns: initialData.columns.map((column) => ({
+    ...column,
+    cardIds: [...column.cardIds],
+  })),
+  cards: Object.fromEntries(
+    Object.entries(initialData.cards).map(([id, card]) => [id, { ...card }])
+  ),
+});
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const isCard = (value: unknown): value is Card =>
+  isRecord(value) &&
+  typeof value.id === "string" &&
+  typeof value.title === "string" &&
+  typeof value.details === "string";
+
+const isColumn = (value: unknown): value is Column =>
+  isRecord(value) &&
+  typeof value.id === "string" &&
+  typeof value.title === "string" &&
+  Array.isArray(value.cardIds) &&
+  value.cardIds.every((cardId) => typeof cardId === "string");
+
+const cloneBoardData = (board: BoardData): BoardData => ({
+  columns: board.columns.map((column) => ({
+    ...column,
+    cardIds: [...column.cardIds],
+  })),
+  cards: Object.fromEntries(
+    Object.entries(board.cards).map(([id, card]) => [id, { ...card }])
+  ),
+});
+
+const hasValidCardReferences = (board: BoardData) =>
+  board.columns.every((column) => column.cardIds.every((cardId) => Boolean(board.cards[cardId])));
+
+export const parseBoardData = (value: string | null): BoardData | null => {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!isRecord(parsed) || !Array.isArray(parsed.columns) || !isRecord(parsed.cards)) {
+      return null;
+    }
+
+    if (!parsed.columns.every(isColumn) || !Object.values(parsed.cards).every(isCard)) {
+      return null;
+    }
+
+    const board = cloneBoardData({
+      columns: parsed.columns,
+      cards: parsed.cards as Record<string, Card>,
+    });
+
+    if (!hasValidCardReferences(board)) {
+      return null;
+    }
+
+    return board;
+  } catch {
+    return null;
+  }
+};
+
+export const loadBoardFromStorage = (storage: Storage): BoardData => {
+  const storedBoard = parseBoardData(storage.getItem(BOARD_STORAGE_KEY));
+  return storedBoard ?? createInitialBoardData();
+};
+
+export const saveBoardToStorage = (storage: Storage, board: BoardData) => {
+  storage.setItem(BOARD_STORAGE_KEY, JSON.stringify(board));
 };
 
 const isColumnId = (columns: Column[], id: string) =>

@@ -1,0 +1,1 @@
+Kanban AI Chat is a Dockerized Next.js + FastAPI MVP project management app with demo sign-in, persistent SQLite-backed Kanban boards, and an OpenRouter-powered AI sidebar that can safely suggest and apply board updates.

@@ -174,3 +174,14 @@ cython_debug/
 
 .DS_Store
 
+.env
+
+AGENTS.md
+
+.gitignore
+
+PLAN.md
+
+DB_SCHEMA.md
+
+RUNNING.md

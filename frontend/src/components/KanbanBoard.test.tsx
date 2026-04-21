@@ -1,17 +1,28 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState, type ReactElement } from "react";
 import { KanbanBoard } from "@/components/KanbanBoard";
+import { createInitialBoardData, type BoardData } from "@/lib/kanban";
 
 const getFirstColumn = () => screen.getAllByTestId(/column-/i)[0];
 
+const renderBoard = (): ReactElement => {
+  const BoardHarness = () => {
+    const [board, setBoard] = useState<BoardData>(() => createInitialBoardData());
+    return <KanbanBoard board={board} onBoardChange={setBoard} />;
+  };
+
+  return <BoardHarness />;
+};
+
 describe("KanbanBoard", () => {
   it("renders five columns", () => {
-    render(<KanbanBoard />);
+    render(renderBoard());
     expect(screen.getAllByTestId(/column-/i)).toHaveLength(5);
   });
 
   it("renames a column", async () => {
-    render(<KanbanBoard />);
+    render(renderBoard());
     const column = getFirstColumn();
     const input = within(column).getByLabelText("Column title");
     await userEvent.clear(input);
@@ -20,7 +31,7 @@ describe("KanbanBoard", () => {
   });
 
   it("adds and removes a card", async () => {
-    render(<KanbanBoard />);
+    render(renderBoard());
     const column = getFirstColumn();
     const addButton = within(column).getByRole("button", {
       name: /add a card/i,
