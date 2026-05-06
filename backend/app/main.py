@@ -4,6 +4,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from backend.app.ai_client import OpenRouterError, run_ai_connectivity_check
 from backend.app.board_service import (
     InvalidCredentialsError,
     BoardWriteError,
@@ -11,7 +12,7 @@ from backend.app.board_service import (
     update_board_for_user,
 )
 from backend.app.db import DEFAULT_DB_PATH
-from backend.app.schemas import BoardPayload
+from backend.app.schemas import AICheckResponse, BoardPayload
 
 
 def create_app(db_path: str | Path | None = None) -> FastAPI:
@@ -55,6 +56,17 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
             raise HTTPException(status_code=401, detail=str(error)) from error
         except BoardWriteError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
+
+    @app.post("/api/ai/check", response_model=AICheckResponse)
+    def ai_connectivity_check() -> AICheckResponse:
+        try:
+            reply = run_ai_connectivity_check()
+            return AICheckResponse(reply=reply)
+        except OpenRouterError as error:
+            raise HTTPException(
+                status_code=502,
+                detail="OpenRouter request failed.",
+            ) from error
 
     static_dir = Path(__file__).resolve().parent.parent / "static"
 

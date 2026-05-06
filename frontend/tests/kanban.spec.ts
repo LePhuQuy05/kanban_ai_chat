@@ -68,7 +68,10 @@ test("keeps board changes after logout and next login", async ({ page }) => {
   await expect(backlogColumn.getByText("Test Card")).toBeVisible();
 
   const secondColumn = page.locator('[data-testid="column-col-discovery"]');
-  const card = backlogColumn.getByText("Test Card");
+  const card = backlogColumn
+    .locator('[data-testid^="card-"]')
+    .filter({ hasText: "Test Card" })
+    .first();
   const cardBox = await card.boundingBox();
   const secondColumnBox = await secondColumn.boundingBox();
   if (!cardBox || !secondColumnBox) {

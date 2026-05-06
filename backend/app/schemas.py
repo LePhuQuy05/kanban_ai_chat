@@ -36,3 +36,7 @@ class BoardPayload(BaseModel):
             raise ValueError("Columns must reference every card exactly once.")
 
         return self
+
+
+class AICheckResponse(BaseModel):
+    reply: str = Field(min_length=1)

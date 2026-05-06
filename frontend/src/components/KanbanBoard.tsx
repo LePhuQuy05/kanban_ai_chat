@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -8,7 +8,10 @@ import {
   useSensor,
   useSensors,
   closestCorners,
+  pointerWithin,
+  type CollisionDetection,
   type DragEndEvent,
+  type DragOverEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { KanbanColumn } from "@/components/KanbanColumn";
@@ -22,6 +25,14 @@ type KanbanBoardProps = {
 
 export const KanbanBoard = ({ board, onBoardChange }: KanbanBoardProps) => {
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
+  const lastOverId = useRef<string | null>(null);
+  const collisionDetectionStrategy: CollisionDetection = (args) => {
+    const pointerCollisions = pointerWithin(args);
+    if (pointerCollisions.length > 0) {
+      return pointerCollisions;
+    }
+    return closestCorners(args);
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -33,19 +44,34 @@ export const KanbanBoard = ({ board, onBoardChange }: KanbanBoardProps) => {
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveCardId(event.active.id as string);
+    lastOverId.current = null;
+  };
+
+  const handleDragOver = (event: DragOverEvent) => {
+    const overId = event.over?.id;
+    if (!overId || overId === event.active.id) {
+      return;
+    }
+    lastOverId.current = overId as string;
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveCardId(null);
 
-    if (!over || active.id === over.id) {
+    const overId =
+      over && active.id !== over.id
+        ? (over.id as string)
+        : lastOverId.current;
+    lastOverId.current = null;
+
+    if (!overId || active.id === overId) {
       return;
     }
 
     onBoardChange((prev) => ({
       ...prev,
-      columns: moveCard(prev.columns, active.id as string, over.id as string),
+      columns: moveCard(prev.columns, active.id as string, overId),
     }));
   };
 
@@ -139,8 +165,9 @@ export const KanbanBoard = ({ board, onBoardChange }: KanbanBoardProps) => {
 
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCorners}
+          collisionDetection={collisionDetectionStrategy}
           onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
           <section className="grid gap-6 lg:grid-cols-5">

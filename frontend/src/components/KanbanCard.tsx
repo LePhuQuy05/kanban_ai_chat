@@ -15,6 +15,7 @@ export const KanbanCard = ({ card, onDelete }: KanbanCardProps) => {
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
+    touchAction: "none" as const,
   };
 
   return (
@@ -23,7 +24,7 @@ export const KanbanCard = ({ card, onDelete }: KanbanCardProps) => {
       style={style}
       className={clsx(
         "rounded-2xl border border-transparent bg-white px-4 py-4 shadow-[0_12px_24px_rgba(3,33,71,0.08)]",
-        "transition-all duration-150",
+        "cursor-grab select-none transition-all duration-150 active:cursor-grabbing",
         isDragging && "opacity-60 shadow-[0_18px_32px_rgba(3,33,71,0.16)]"
       )}
       {...attributes}

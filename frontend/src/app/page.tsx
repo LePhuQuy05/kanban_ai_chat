@@ -1,13 +1,9 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { KanbanBoard } from "@/components/KanbanBoard";
-import {
-  createInitialBoardData,
-  loadBoardFromStorage,
-  saveBoardToStorage,
-  type BoardData,
-} from "@/lib/kanban";
+import { createInitialBoardData, type BoardData } from "@/lib/kanban";
+import { fetchBoard, updateBoard } from "@/lib/boardApi";
 
 const USERNAME = "user";
 const PASSWORD = "password";
@@ -18,19 +14,48 @@ export default function Home() {
   const [error, setError] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [board, setBoard] = useState<BoardData>(() => createInitialBoardData());
+  const [isLoadingBoard, setIsLoadingBoard] = useState(false);
+  const [isSavingBoard, setIsSavingBoard] = useState(false);
+  const [boardError, setBoardError] = useState("");
+  const latestSaveRequestId = useRef(0);
 
   useEffect(() => {
     if (!isAuthenticated) {
       return;
     }
 
-    saveBoardToStorage(window.localStorage, board);
-  }, [board, isAuthenticated]);
+    let isCancelled = false;
+    const loadBoard = async () => {
+      setIsLoadingBoard(true);
+      setBoardError("");
+      try {
+        const loadedBoard = await fetchBoard();
+        if (!isCancelled) {
+          setBoard(loadedBoard);
+        }
+      } catch (loadError) {
+        if (!isCancelled) {
+          setBoardError(
+            loadError instanceof Error ? loadError.message : "Unable to load board."
+          );
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingBoard(false);
+        }
+      }
+    };
+
+    void loadBoard();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isAuthenticated]);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (username === USERNAME && password === PASSWORD) {
-      setBoard(loadBoardFromStorage(window.localStorage));
       setIsAuthenticated(true);
       setError("");
       return;
@@ -43,6 +68,40 @@ export default function Home() {
     setUsername("");
     setPassword("");
     setError("");
+    setBoardError("");
+    setIsLoadingBoard(false);
+    setIsSavingBoard(false);
+    setBoard(createInitialBoardData());
+  };
+
+  const handleBoardChange = (
+    nextBoard: BoardData | ((previous: BoardData) => BoardData)
+  ) => {
+    setBoard((previous) => {
+      const resolvedBoard =
+        typeof nextBoard === "function" ? nextBoard(previous) : nextBoard;
+
+      setIsSavingBoard(true);
+      setBoardError("");
+      const requestId = latestSaveRequestId.current + 1;
+      latestSaveRequestId.current = requestId;
+      void updateBoard(resolvedBoard)
+        .then(() => undefined)
+        .catch((saveError) => {
+          if (requestId === latestSaveRequestId.current) {
+            setBoardError(
+              saveError instanceof Error ? saveError.message : "Unable to save board."
+            );
+          }
+        })
+        .finally(() => {
+          if (requestId === latestSaveRequestId.current) {
+            setIsSavingBoard(false);
+          }
+        });
+
+      return resolvedBoard;
+    });
   };
 
   if (!isAuthenticated) {
@@ -96,7 +155,20 @@ export default function Home() {
   return (
     <>
       <div className="mx-auto w-full max-w-[1500px] px-6 pt-6">
-        <div className="flex justify-end">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-h-6">
+            {isLoadingBoard ? (
+              <p className="text-sm font-semibold text-[var(--gray-text)]">Loading board...</p>
+            ) : null}
+            {!isLoadingBoard && isSavingBoard ? (
+              <p className="text-sm font-semibold text-[var(--gray-text)]">Saving changes...</p>
+            ) : null}
+            {boardError ? (
+              <p role="alert" className="text-sm font-semibold text-red-600">
+                {boardError}
+              </p>
+            ) : null}
+          </div>
           <button
             type="button"
             onClick={handleLogout}
@@ -106,7 +178,7 @@ export default function Home() {
           </button>
         </div>
       </div>
-      <KanbanBoard board={board} onBoardChange={setBoard} />
+      <KanbanBoard board={board} onBoardChange={handleBoardChange} />
     </>
   );
 }
