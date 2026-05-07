@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -40,3 +42,25 @@ class BoardPayload(BaseModel):
 
 class AICheckResponse(BaseModel):
     reply: str = Field(min_length=1)
+
+
+class ChatMessagePayload(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1)
+
+
+class AIChatRequest(BaseModel):
+    conversation: list[ChatMessagePayload] = Field(default_factory=list)
+    board: BoardPayload
+    userMessage: str = Field(min_length=1)
+
+
+class AIModelOutputPayload(BaseModel):
+    assistantReply: str = Field(min_length=1)
+    board: BoardPayload | None = None
+
+
+class AIChatResponse(BaseModel):
+    reply: str = Field(min_length=1)
+    mutationApplied: bool
+    board: BoardPayload | None = None

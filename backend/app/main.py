@@ -4,6 +4,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from backend.app.ai_chat_service import run_ai_chat_turn
 from backend.app.ai_client import OpenRouterError, run_ai_connectivity_check
 from backend.app.board_service import (
     InvalidCredentialsError,
@@ -12,7 +13,7 @@ from backend.app.board_service import (
     update_board_for_user,
 )
 from backend.app.db import DEFAULT_DB_PATH
-from backend.app.schemas import AICheckResponse, BoardPayload
+from backend.app.schemas import AICheckResponse, AIChatRequest, AIChatResponse, BoardPayload
 
 
 def create_app(db_path: str | Path | None = None) -> FastAPI:
@@ -62,6 +63,30 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
         try:
             reply = run_ai_connectivity_check()
             return AICheckResponse(reply=reply)
+        except OpenRouterError as error:
+            raise HTTPException(
+                status_code=502,
+                detail="OpenRouter request failed.",
+            ) from error
+
+    @app.post("/api/ai/chat", response_model=AIChatResponse)
+    def ai_chat(
+        payload: AIChatRequest,
+        request: Request,
+        credentials: tuple[str, str] = Depends(get_credentials),
+    ) -> AIChatResponse:
+        username, password = credentials
+        try:
+            return run_ai_chat_turn(
+                db_path=request.app.state.db_path,
+                username=username,
+                password=password,
+                payload=payload,
+            )
+        except InvalidCredentialsError as error:
+            raise HTTPException(status_code=401, detail=str(error)) from error
+        except BoardWriteError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
         except OpenRouterError as error:
             raise HTTPException(
                 status_code=502,

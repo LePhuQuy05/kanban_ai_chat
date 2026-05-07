@@ -16,10 +16,10 @@ class OpenRouterError(RuntimeError):
     pass
 
 
-def request_openrouter_completion(api_key: str, prompt: str) -> dict:
+def request_openrouter_chat(api_key: str, messages: list[dict[str, str]]) -> dict:
     payload = {
         "model": OPENROUTER_MODEL,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": messages,
     }
     body = json.dumps(payload).encode("utf-8")
     http_request = request.Request(
@@ -46,6 +46,13 @@ def request_openrouter_completion(api_key: str, prompt: str) -> dict:
     except json.JSONDecodeError as json_error:
         logger.error("OpenRouter JSON decode error: %s", str(json_error))
         raise OpenRouterError("OpenRouter returned invalid JSON.") from json_error
+
+
+def request_openrouter_completion(api_key: str, prompt: str) -> dict:
+    return request_openrouter_chat(
+        api_key,
+        [{"role": "user", "content": prompt}],
+    )
 
 
 def run_ai_connectivity_check(api_key: str | None = None) -> str:

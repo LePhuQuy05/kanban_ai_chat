@@ -1,9 +1,15 @@
 import os
+import json
 
 import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.main import create_app
+
+AUTH_HEADERS = {
+    "X-Username": "user",
+    "X-Password": "password",
+}
 
 
 def test_root_returns_html() -> None:
@@ -60,3 +66,104 @@ def test_ai_check_live_openrouter_smoke() -> None:
     payload = response.json()
     assert isinstance(payload.get("reply"), str)
     assert payload["reply"].strip()
+
+
+def test_ai_chat_returns_reply_without_board_mutation(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    client = TestClient(create_app(tmp_path / "pm.db"))
+    board = client.get("/api/board", headers=AUTH_HEADERS).json()
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr(
+        "backend.app.ai_chat_service.request_openrouter_chat",
+        lambda api_key, messages: {
+            "choices": [
+                {
+                    "message": {
+                        "content": '{"assistantReply":"No board update needed.","board":null}'
+                    }
+                }
+            ]
+        },
+    )
+
+    response = client.post(
+        "/api/ai/chat",
+        headers=AUTH_HEADERS,
+        json={
+            "conversation": [{"role": "assistant", "content": "What would you like to change?"}],
+            "board": board,
+            "userMessage": "Just summarize my board.",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "reply": "No board update needed.",
+        "mutationApplied": False,
+        "board": None,
+    }
+
+
+def test_ai_chat_applies_valid_board_mutation(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    client = TestClient(create_app(tmp_path / "pm.db"))
+    board = client.get("/api/board", headers=AUTH_HEADERS).json()
+    board["columns"][0]["title"] = "AI Backlog"
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr(
+        "backend.app.ai_chat_service.request_openrouter_chat",
+        lambda api_key, messages: {
+            "choices": [
+                {
+                    "message": {
+                        "content": (
+                            '{"assistantReply":"I renamed Backlog.","board":'
+                            + json.dumps(board)
+                            + "}"
+                        )
+                    }
+                }
+            ]
+        },
+    )
+
+    response = client.post(
+        "/api/ai/chat",
+        headers=AUTH_HEADERS,
+        json={
+            "conversation": [],
+            "board": board,
+            "userMessage": "Rename backlog column to AI Backlog.",
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["mutationApplied"] is True
+    assert payload["board"]["columns"][0]["title"] == "AI Backlog"
+
+    read_back = client.get("/api/board", headers=AUTH_HEADERS)
+    assert read_back.status_code == 200
+    assert read_back.json()["columns"][0]["title"] == "AI Backlog"
+
+
+def test_ai_chat_rejects_invalid_model_payload(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    client = TestClient(create_app(tmp_path / "pm.db"))
+    board = client.get("/api/board", headers=AUTH_HEADERS).json()
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr(
+        "backend.app.ai_chat_service.request_openrouter_chat",
+        lambda api_key, messages: {"choices": [{"message": {"content": "not-json"}}]},
+    )
+
+    response = client.post(
+        "/api/ai/chat",
+        headers=AUTH_HEADERS,
+        json={
+            "conversation": [],
+            "board": board,
+            "userMessage": "Move card 1 to review.",
+        },
+    )
+    assert response.status_code == 502
+    assert response.json() == {"detail": "OpenRouter request failed."}
