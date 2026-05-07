@@ -3,17 +3,38 @@ from __future__ import annotations
 import json
 import logging
 import os
+from pathlib import Path
 from urllib import error, request
+
+from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-OPENROUTER_MODEL = "openai/gpt-oss-120b/free"
+OPENROUTER_MODEL = "openai/gpt-oss-120b:free"
 CONNECTIVITY_PROMPT = "What is 2+2? Reply with just the number."
+DOTENV_PATH = Path(__file__).resolve().parents[2] / ".env"
 
 
 class OpenRouterError(RuntimeError):
     pass
+
+
+def resolve_openrouter_api_key(api_key: str | None = None) -> str:
+    if api_key:
+        return api_key
+
+    resolved_api_key = os.getenv("OPENROUTER_API_KEY")
+    if resolved_api_key:
+        return resolved_api_key
+
+    load_dotenv(DOTENV_PATH)
+    resolved_api_key = os.getenv("OPENROUTER_API_KEY")
+    if resolved_api_key:
+        return resolved_api_key
+
+    logger.error("OPENROUTER_API_KEY is not set.")
+    raise OpenRouterError("Missing OPENROUTER_API_KEY.")
 
 
 def request_openrouter_chat(api_key: str, messages: list[dict[str, str]]) -> dict:
@@ -56,11 +77,7 @@ def request_openrouter_completion(api_key: str, prompt: str) -> dict:
 
 
 def run_ai_connectivity_check(api_key: str | None = None) -> str:
-    resolved_api_key = api_key or os.getenv("OPENROUTER_API_KEY")
-    if not resolved_api_key:
-        logger.error("OPENROUTER_API_KEY is not set.")
-        raise OpenRouterError("Missing OPENROUTER_API_KEY.")
-
+    resolved_api_key = resolve_openrouter_api_key(api_key)
     payload = request_openrouter_completion(resolved_api_key, CONNECTIVITY_PROMPT)
     try:
         content = payload["choices"][0]["message"]["content"]

@@ -5,6 +5,7 @@ description = "Project Management MVP backend"
 requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.121.0",
+  "python-dotenv>=1.2.2",
   "uvicorn[standard]>=0.38.0",
 ]
 

@@ -44,6 +44,7 @@ def test_ai_check_returns_reply_with_mocked_openrouter(monkeypatch: pytest.Monke
 def test_ai_check_returns_502_when_openrouter_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     client = TestClient(create_app())
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setattr("backend.app.ai_client.load_dotenv", lambda path: False)
 
     response = client.post("/api/ai/check")
 

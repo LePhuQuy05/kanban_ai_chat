@@ -25,6 +25,21 @@ describe("Home auth gate", () => {
     serverBoard = createInitialBoardData();
     fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
+      if (url.endsWith("/api/ai/chat")) {
+        const payload = JSON.parse((init?.body as string) ?? "{}") as {
+          board: BoardData;
+          userMessage: string;
+        };
+        return new Response(
+          JSON.stringify({
+            reply: `AI: ${payload.userMessage}`,
+            mutationApplied: false,
+            board: null,
+          }),
+          { status: 200 }
+        );
+      }
+
       if (!url.endsWith("/api/board")) {
         return new Response(JSON.stringify({ detail: "Not found" }), { status: 404 });
       }
@@ -247,5 +262,58 @@ describe("Home auth gate", () => {
     firstSave.resolve(new Response(JSON.stringify(serverBoard), { status: 200 }));
 
     expect(await screen.findByDisplayValue("Second Save Title")).toBeInTheDocument();
+  });
+
+  it("sends chat and renders assistant reply", async () => {
+    render(<Home />);
+    await login();
+
+    await userEvent.type(screen.getByLabelText(/message/i), "Move one task to review");
+    await userEvent.click(screen.getByRole("button", { name: /^send$/i }));
+
+    expect(await screen.findByText("AI: Move one task to review")).toBeInTheDocument();
+    expect(screen.getByTestId("chat-thread")).toHaveTextContent("Move one task to review");
+  });
+
+  it("applies AI board mutation and refreshes board UI", async () => {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/api/ai/chat")) {
+        const mutatedBoard = {
+          ...serverBoard,
+          columns: serverBoard.columns.map((column) =>
+            column.id === "col-review" ? { ...column, title: "QA Review" } : column
+          ),
+        };
+        serverBoard = mutatedBoard;
+        return new Response(
+          JSON.stringify({
+            reply: "Updated review column.",
+            mutationApplied: true,
+            board: mutatedBoard,
+          }),
+          { status: 200 }
+        );
+      }
+
+      if (!url.endsWith("/api/board")) {
+        return new Response(JSON.stringify({ detail: "Not found" }), { status: 404 });
+      }
+      if ((init?.method ?? "GET").toUpperCase() === "GET") {
+        return new Response(JSON.stringify(serverBoard), { status: 200 });
+      }
+      const payload = JSON.parse((init?.body as string) ?? "{}") as BoardData;
+      serverBoard = payload;
+      return new Response(JSON.stringify(serverBoard), { status: 200 });
+    });
+
+    render(<Home />);
+    await login();
+
+    await userEvent.type(screen.getByLabelText(/message/i), "Rename review to QA Review");
+    await userEvent.click(screen.getByRole("button", { name: /^send$/i }));
+
+    expect(await screen.findByDisplayValue("QA Review")).toBeInTheDocument();
+    expect(screen.getByText("Updated review column.")).toBeInTheDocument();
   });
 });

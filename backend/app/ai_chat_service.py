@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 from pathlib import Path
 
-from backend.app.ai_client import OpenRouterError, request_openrouter_chat
+from backend.app.ai_client import (
+    OpenRouterError,
+    request_openrouter_chat,
+    resolve_openrouter_api_key,
+)
 from backend.app.board_service import update_board_for_user
 from backend.app.schemas import AIChatRequest, AIChatResponse, AIModelOutputPayload
 
@@ -43,11 +46,7 @@ def run_ai_chat_turn(
     password: str,
     payload: AIChatRequest,
 ) -> AIChatResponse:
-    api_key = os.getenv("OPENROUTER_API_KEY")
-    if not api_key:
-        logger.error("OPENROUTER_API_KEY is not set for AI chat.")
-        raise OpenRouterError("Missing OPENROUTER_API_KEY.")
-
+    api_key = resolve_openrouter_api_key()
     messages: list[dict[str, str]] = [{"role": "system", "content": SYSTEM_PROMPT}]
     messages.extend(
         {"role": message.role, "content": message.content}

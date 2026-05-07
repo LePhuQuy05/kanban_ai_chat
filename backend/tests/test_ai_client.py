@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 
@@ -60,3 +61,26 @@ def test_run_ai_connectivity_check_raises_for_invalid_response(monkeypatch: pyte
 
     with pytest.raises(OpenRouterError):
         run_ai_connectivity_check()
+
+
+def test_run_ai_connectivity_check_loads_api_key_from_dotenv(monkeypatch: pytest.MonkeyPatch):
+    captured = {}
+
+    def fake_load_dotenv(path: Path):
+        captured["dotenv_path"] = path
+        monkeypatch.setenv("OPENROUTER_API_KEY", "dotenv-key")
+        return True
+
+    def fake_urlopen(http_request, timeout: int):
+        captured["authorization"] = http_request.headers.get("Authorization")
+        return FakeHTTPResponse({"choices": [{"message": {"content": "4"}}]})
+
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setattr("backend.app.ai_client.load_dotenv", fake_load_dotenv)
+    monkeypatch.setattr("backend.app.ai_client.request.urlopen", fake_urlopen)
+
+    reply = run_ai_connectivity_check()
+
+    assert reply == "4"
+    assert captured["authorization"] == "Bearer dotenv-key"
+    assert captured["dotenv_path"].name == ".env"

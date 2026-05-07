@@ -17,7 +17,7 @@ WORKDIR /app
 
 RUN pip install --no-cache-dir uv
 
-RUN uv pip install --system "fastapi>=0.121.0" "uvicorn[standard]>=0.38.0"
+RUN uv pip install --system "fastapi>=0.121.0" "python-dotenv>=1.2.2" "uvicorn[standard]>=0.38.0"
 
 COPY backend /app/backend
 COPY --from=frontend-builder /app/frontend/out /app/backend/static
